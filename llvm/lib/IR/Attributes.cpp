@@ -337,6 +337,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "sanitize_hwaddress";
   if (hasAttribute(Attribute::SanitizeMemTag))
     return "sanitize_memtag";
+  if (hasAttribute(Attribute::SanitizeNumericalStability))
+    return "sanitize_numericalstability";
   if (hasAttribute(Attribute::AlwaysInline))
     return "alwaysinline";
   if (hasAttribute(Attribute::ArgMemOnly))

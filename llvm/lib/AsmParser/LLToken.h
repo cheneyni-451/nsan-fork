@@ -182,6 +182,7 @@ enum Kind {
   kw_sanitize_address,
   kw_sanitize_hwaddress,
   kw_sanitize_memtag,
+  kw_sanitize_numericalstability,
   kw_builtin,
   kw_byval,
   kw_inalloca,

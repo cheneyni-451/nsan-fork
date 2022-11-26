@@ -7,6 +7,7 @@ add_llvm_component_library(LLVMInstrumentation
   GCOVProfiling.cpp
   MemProfiler.cpp
   MemorySanitizer.cpp
+  NumericalStabilitySanitizer.cpp
   IndirectCallPromotion.cpp
   Instrumentation.cpp
   InstrOrderFile.cpp

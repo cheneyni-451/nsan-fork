@@ -1395,6 +1395,8 @@ bool LLParser::parseFnAttributeValuePairs(AttrBuilder &B,
       B.addAttribute(Attribute::SanitizeHWAddress); break;
     case lltok::kw_sanitize_memtag:
       B.addAttribute(Attribute::SanitizeMemTag); break;
+    case lltok::kw_sanitize_numericalstability:
+      B.addAttribute(Attribute::SanitizeNumericalStability); break;
     case lltok::kw_sanitize_thread:
       B.addAttribute(Attribute::SanitizeThread); break;
     case lltok::kw_sanitize_memory:
@@ -1791,6 +1793,7 @@ bool LLParser::parseOptionalParamAttrs(AttrBuilder &B) {
     case lltok::kw_sanitize_address:
     case lltok::kw_sanitize_hwaddress:
     case lltok::kw_sanitize_memtag:
+    case lltok::kw_sanitize_numericalstability:
     case lltok::kw_sanitize_memory:
     case lltok::kw_sanitize_thread:
     case lltok::kw_speculative_load_hardening:
@@ -1900,6 +1903,7 @@ bool LLParser::parseOptionalReturnAttrs(AttrBuilder &B) {
     case lltok::kw_sanitize_address:
     case lltok::kw_sanitize_hwaddress:
     case lltok::kw_sanitize_memtag:
+    case lltok::kw_sanitize_numericalstability:
     case lltok::kw_sanitize_memory:
     case lltok::kw_sanitize_thread:
     case lltok::kw_speculative_load_hardening:

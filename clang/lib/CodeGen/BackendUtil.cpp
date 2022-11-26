@@ -72,6 +72,7 @@
 #include "llvm/Transforms/Instrumentation/InstrProfiling.h"
 #include "llvm/Transforms/Instrumentation/MemProfiler.h"
 #include "llvm/Transforms/Instrumentation/MemorySanitizer.h"
+#include "llvm/Transforms/Instrumentation/NumericalStabilitySanitizer.h"
 #include "llvm/Transforms/Instrumentation/SanitizerCoverage.h"
 #include "llvm/Transforms/Instrumentation/ThreadSanitizer.h"
 #include "llvm/Transforms/ObjCARC.h"
@@ -357,6 +358,11 @@ static void addKernelMemorySanitizerPass(const PassManagerBuilder &Builder,
 static void addThreadSanitizerPass(const PassManagerBuilder &Builder,
                                    legacy::PassManagerBase &PM) {
   PM.add(createThreadSanitizerLegacyPassPass());
+}
+
+static void addNumericalStabilitySanitizerPass(const PassManagerBuilder &Builder,
+                                               legacy::PassManagerBase &PM) {
+  PM.add(createNumericalStabilitySanitizerLegacyPassPass());
 }
 
 static void addDataFlowSanitizerPass(const PassManagerBuilder &Builder,
@@ -776,6 +782,13 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
                            addThreadSanitizerPass);
   }
 
+  if (LangOpts.Sanitize.has(SanitizerKind::NumericalStability)) {
+    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                           addNumericalStabilitySanitizerPass);
+    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+                           addNumericalStabilitySanitizerPass);
+  }
+
   if (LangOpts.Sanitize.has(SanitizerKind::DataFlow)) {
     PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
                            addDataFlowSanitizerPass);
@@ -1105,6 +1118,11 @@ static void addSanitizers(const Triple &TargetTriple,
     if (LangOpts.Sanitize.has(SanitizerKind::Thread)) {
       MPM.addPass(ThreadSanitizerPass());
       MPM.addPass(createModuleToFunctionPassAdaptor(ThreadSanitizerPass()));
+    }
+
+    if (LangOpts.Sanitize.has(SanitizerKind::NumericalStability)) {
+      MPM.addPass(NumericalStabilitySanitizerPass());
+      MPM.addPass(createModuleToFunctionPassAdaptor(NumericalStabilitySanitizerPass()));
     }
 
     auto ASanPass = [&](SanitizerMask Mask, bool CompileKernel) {

@@ -86,6 +86,7 @@ public:
   bool needsCfiDiagRt() const;
   bool needsStatsRt() const { return Stats; }
   bool needsScudoRt() const { return Sanitizers.has(SanitizerKind::Scudo); }
+  bool needsNsanRt() const { return Sanitizers.has(SanitizerKind::NumericalStability); }
 
   bool requiresPIE() const;
   bool needsUnwindTables() const;

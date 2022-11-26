@@ -38,7 +38,7 @@ static const SanitizerMask RequiresPIE =
     SanitizerKind::DataFlow | SanitizerKind::HWAddress | SanitizerKind::Scudo;
 static const SanitizerMask NeedsUnwindTables =
     SanitizerKind::Address | SanitizerKind::HWAddress | SanitizerKind::Thread |
-    SanitizerKind::Memory | SanitizerKind::DataFlow;
+    SanitizerKind::Memory | SanitizerKind::DataFlow | SanitizerKind::NumericalStability;
 static const SanitizerMask SupportsCoverage =
     SanitizerKind::Address | SanitizerKind::HWAddress |
     SanitizerKind::KernelAddress | SanitizerKind::KernelHWAddress |
@@ -49,7 +49,7 @@ static const SanitizerMask SupportsCoverage =
     SanitizerKind::DataFlow | SanitizerKind::Fuzzer |
     SanitizerKind::FuzzerNoLink | SanitizerKind::FloatDivideByZero |
     SanitizerKind::SafeStack | SanitizerKind::ShadowCallStack |
-    SanitizerKind::Thread | SanitizerKind::ObjCCast;
+    SanitizerKind::Thread | SanitizerKind::ObjCCast | SanitizerKind::NumericalStability;
 static const SanitizerMask RecoverableByDefault =
     SanitizerKind::Undefined | SanitizerKind::Integer |
     SanitizerKind::ImplicitConversion | SanitizerKind::Nullability |
@@ -143,6 +143,7 @@ static void addDefaultBlacklists(const Driver &D, SanitizerMask Kinds,
                     {"memtag_blacklist.txt", SanitizerKind::MemTag},
                     {"msan_blacklist.txt", SanitizerKind::Memory},
                     {"tsan_blacklist.txt", SanitizerKind::Thread},
+                    {"nsan_blacklist.txt", SanitizerKind::NumericalStability},
                     {"dfsan_abilist.txt", SanitizerKind::DataFlow},
                     {"cfi_blacklist.txt", SanitizerKind::CFI},
                     {"ubsan_blacklist.txt",

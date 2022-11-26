@@ -691,6 +691,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(sanitize_address);
   KEYWORD(sanitize_hwaddress);
   KEYWORD(sanitize_memtag);
+  KEYWORD(sanitize_numericalstability);
   KEYWORD(sanitize_thread);
   KEYWORD(sanitize_memory);
   KEYWORD(speculative_load_hardening);
