@@ -20,6 +20,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Analysis/BranchProbabilityInfo.h"
 #include "llvm/Analysis/CaptureTracking.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -477,7 +478,9 @@ private:
     // Vector, array, or aggregate constants.
     if (C->getType()->isVectorTy()) {
       SmallVector<Constant *, 8> Elements;
-      for (int I = 0, E = cast<VectorType>(C->getType())->getElementCount().getFixedValue();
+      for (int I = 0, E = cast<VectorType>(C->getType())
+                              ->getElementCount()
+                              .getFixedValue();
            I < E; ++I)
         Elements.push_back(getShadowConstant(C->getAggregateElement(I)));
       return ConstantVector::get(Elements);
@@ -495,15 +498,17 @@ private:
 /// constructors for the module.
 class NumericalStabilitySanitizer {
 public:
-  bool sanitizeFunction(Function &F, const TargetLibraryInfo &TLI);
+  bool sanitizeFunction(Function &F, const TargetLibraryInfo &TLI,
+                        const BranchProbabilityInfo &BPI);
 
 private:
   void initialize(Module &M);
   bool instrumentMemIntrinsic(MemIntrinsic *MI);
   void maybeAddSuffixForNsanInterface(CallBase *CI);
   bool addrPointsToConstantData(Value *Addr);
-  void maybeCreateShadowValue(Instruction &Root, const TargetLibraryInfo &TLI,
-                              ValueToShadowMap &Map);
+  void maybeCreateShadowValue(
+      Instruction &Root, const TargetLibraryInfo &TLI, ValueToShadowMap &Map,
+      const std::vector<Instruction *> &OriginalInstructions);
   Value *createShadowValueWithOperandsAvailable(Instruction &Inst,
                                                 const TargetLibraryInfo &TLI,
                                                 const ValueToShadowMap &Map);
@@ -587,7 +592,8 @@ PreservedAnalyses
 NumericalStabilitySanitizerPass::run(Function &F,
                                      FunctionAnalysisManager &FAM) {
   NumericalStabilitySanitizer Nsan;
-  if (Nsan.sanitizeFunction(F, FAM.getResult<TargetLibraryAnalysis>(F)))
+  if (Nsan.sanitizeFunction(F, FAM.getResult<TargetLibraryAnalysis>(F),
+                            FAM.getResult<BranchProbabilityAnalysis>(F)))
     return PreservedAnalyses::none();
   return PreservedAnalyses::all();
 }
@@ -600,12 +606,12 @@ NumericalStabilitySanitizerPass::run(Module &M, ModuleAnalysisManager &MAM) {
 
 char NumericalStabilitySanitizerLegacyPass::ID = 0;
 INITIALIZE_PASS_BEGIN(NumericalStabilitySanitizerLegacyPass, "nsan",
-                      "NumericalStabilitySanitizer: detects numerical errors.", false,
-                      false)
+                      "NumericalStabilitySanitizer: detects numerical errors.",
+                      false, false)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_END(NumericalStabilitySanitizerLegacyPass, "nsan",
-                    "NumericalStabilitySanitizer: detects numerical errors.", false,
-                    false)
+                    "NumericalStabilitySanitizer: detects numerical errors.",
+                    false, false)
 
 StringRef NumericalStabilitySanitizerLegacyPass::getPassName() const {
   return "NumericalStabilitySanitizerLegacyPass";
@@ -614,6 +620,7 @@ StringRef NumericalStabilitySanitizerLegacyPass::getPassName() const {
 void NumericalStabilitySanitizerLegacyPass::getAnalysisUsage(
     AnalysisUsage &AU) const {
   AU.addRequired<TargetLibraryInfoWrapperPass>();
+  AU.addRequired<BranchProbabilityInfoWrapperPass>();
 }
 
 bool NumericalStabilitySanitizerLegacyPass::doInitialization(Module &M) {
@@ -624,7 +631,8 @@ bool NumericalStabilitySanitizerLegacyPass::doInitialization(Module &M) {
 
 bool NumericalStabilitySanitizerLegacyPass::runOnFunction(Function &F) {
   auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
-  Nsan->sanitizeFunction(F, TLI);
+  auto &BPI = getAnalysis<BranchProbabilityInfoWrapperPass>().getBPI();
+  Nsan->sanitizeFunction(F, TLI, BPI);
   return true;
 }
 
@@ -1035,7 +1043,9 @@ void NumericalStabilitySanitizer::emitFCmpCheck(FCmpInst &FCmp,
                                      Result, ShadowResult});
   };
   if (LHS->getType()->isVectorTy()) {
-    for (int I = 0, E = cast<VectorType>(LHS->getType())->getElementCount().getFixedValue();
+    for (int I = 0, E = cast<VectorType>(LHS->getType())
+                            ->getElementCount()
+                            .getFixedValue();
          I < E; ++I) {
       EmitFailCall(FailBuilder.CreateExtractElement(LHS, I),
                    FailBuilder.CreateExtractElement(RHS, I),
@@ -1764,7 +1774,8 @@ Value *NumericalStabilitySanitizer::createShadowValueWithOperandsAvailable(
 // The DFS is guaranteed to not loop as phis and arguments already have
 // shadows.
 void NumericalStabilitySanitizer::maybeCreateShadowValue(
-    Instruction &Root, const TargetLibraryInfo &TLI, ValueToShadowMap &Map) {
+    Instruction &Root, const TargetLibraryInfo &TLI, ValueToShadowMap &Map,
+    const std::vector<Instruction *> &OriginalInstructions) {
   Type *const VT = Root.getType();
   Type *const ExtendedVT = Config.getExtendedFPType(VT);
   if (ExtendedVT == nullptr)
@@ -1794,6 +1805,12 @@ void NumericalStabilitySanitizer::maybeCreateShadowValue(
         continue; // Not an FT value.
       if (Map.hasShadow(Op))
         continue; // Shadow is already available.
+      // if (std::find(OriginalInstructions.cbegin(),
+      // OriginalInstructions.cend(),
+      //               dyn_cast<Instruction>(Op)) ==
+      //               OriginalInstructions.cend())
+      //   continue;
+
       assert(isa<Instruction>(Op) &&
              "non-instructions should already have shadows");
       assert(!isa<PHINode>(Op) && "phi nodes should aready have shadows");
@@ -2063,7 +2080,8 @@ static void moveFastMathFlags(Function &F,
 }
 
 bool NumericalStabilitySanitizer::sanitizeFunction(
-    Function &F, const TargetLibraryInfo &TLI) {
+    Function &F, const TargetLibraryInfo &TLI,
+    const BranchProbabilityInfo &BPI) {
   // This is required to prevent instrumenting call to __nsan_init from within
   // the module constructor.
   if (F.getName() == kNsanModuleCtorName)
@@ -2164,10 +2182,28 @@ bool NumericalStabilitySanitizer::sanitizeFunction(
 
   // Collect all instructions before processing, as creating shadow values
   // creates new instructions inside the function.
+
   std::vector<Instruction *> OriginalInstructions;
+
+  BasicBlock &CurrentBlock = F.getEntryBlock();
+  for (auto &Inst : CurrentBlock) {
+    OriginalInstructions.emplace_back(&Inst);
+  }
+  std::set<BasicBlock *> AddedBlocks = {&CurrentBlock};
+
   for (auto &BB : F) {
-    for (auto &Inst : BB) {
-      OriginalInstructions.emplace_back(&Inst);
+    if (&BB == &F.back()) {
+      continue;
+    }
+    for (BasicBlock *Succ : successors(&BB)) {
+      if (BPI.isEdgeHot(&BB, Succ)) {
+        if (AddedBlocks.find(Succ) != AddedBlocks.end())
+          continue;
+        AddedBlocks.insert(Succ);
+        for (auto &Inst : *Succ) {
+          OriginalInstructions.emplace_back(&Inst);
+        }
+      }
     }
   }
 
@@ -2190,7 +2226,7 @@ bool NumericalStabilitySanitizer::sanitizeFunction(
 
   // Create shadow values for all instructions creating FT values.
   for (Instruction *I : OriginalInstructions) {
-    maybeCreateShadowValue(*I, TLI, ValueToShadow);
+    maybeCreateShadowValue(*I, TLI, ValueToShadow, OriginalInstructions);
   }
 
   // Propagate shadow values across stores, calls and rets.
