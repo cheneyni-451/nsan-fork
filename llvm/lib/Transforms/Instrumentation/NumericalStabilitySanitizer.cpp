@@ -2189,20 +2189,11 @@ bool NumericalStabilitySanitizer::sanitizeFunction(
   for (auto &Inst : CurrentBlock) {
     OriginalInstructions.emplace_back(&Inst);
   }
-  std::set<BasicBlock *> AddedBlocks = {&CurrentBlock};
 
   for (auto &BB : F) {
-    if (&BB == &F.back()) {
-      continue;
-    }
-    for (BasicBlock *Succ : successors(&BB)) {
-      if (BPI.isEdgeHot(&BB, Succ)) {
-        if (AddedBlocks.find(Succ) != AddedBlocks.end())
-          continue;
-        AddedBlocks.insert(Succ);
-        for (auto &Inst : *Succ) {
-          OriginalInstructions.emplace_back(&Inst);
-        }
+    if (BB.hasNPredecessorsOrMore(2)) {
+      for (auto &Inst : BB) {
+        OriginalInstructions.emplace_back(&Inst);
       }
     }
   }
