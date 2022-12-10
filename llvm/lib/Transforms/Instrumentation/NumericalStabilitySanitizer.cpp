@@ -2080,8 +2080,8 @@ static void moveFastMathFlags(Function &F,
 }
 
 
-void addToOriginal(Instruction *I, std::map<Instruction *, Instruction *> &duplicatedInstr, std::vector<Instruction *> &OriginalInstructions) {
-  if (duplicatedInstr.count(I) > 0){
+void addToOriginal(Instruction *I, std::map<Instruction *, int> &duplicatedInstr, std::vector<Instruction *> &OriginalInstructions) {
+  if (duplicatedInstr[I] > 0){
     return;
   }
 
@@ -2096,7 +2096,7 @@ void addToOriginal(Instruction *I, std::map<Instruction *, Instruction *> &dupli
 
   if (!isa<StoreInst>(I)){
     OriginalInstructions.emplace_back(&I);
-    duplicatedInstr[I] = clone_inst;
+    ++duplicatedInstr[I];
   }
   return;
 }
@@ -2213,7 +2213,7 @@ bool NumericalStabilitySanitizer::sanitizeFunction(
   // }
   std::set<BasicBlock *> AddedBlocks = {&CurrentBlock};
 
-  std::map<Instruction *, Instruction *> duplicatedInstr;
+  std::map<Instruction *, int> duplicatedInstr;
 
   for (BasicBlock &BB : F){
     for (Instruction &I : BB){
