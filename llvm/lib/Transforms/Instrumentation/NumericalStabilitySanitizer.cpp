@@ -2079,6 +2079,28 @@ static void moveFastMathFlags(Function &F,
       I->setFastMathFlags(FMF);
 }
 
+
+void addToOriginal(Instruction *I, std::map<Instruction *, Instruction *> &duplicatedInstr) {
+  if (duplicatedInstr.count(I) > 0){
+    return;
+  }
+
+  for (Use &U : I->operands()){
+    Instruction *Inst = dyn_cast<Instruction>(U);
+    if (nullptr == Inst){
+      continue;
+    }
+      
+    addToOriginal(Inst, duplicatedInstr);
+  }
+
+  if (!isa<StoreInst>(I)){
+    OriginalInstructions.emplace_back(&I);
+    duplicatedInstr[I] = clone_inst;
+  }
+  return;
+}
+
 bool NumericalStabilitySanitizer::sanitizeFunction(
     Function &F, const TargetLibraryInfo &TLI,
     const BranchProbabilityInfo &BPI) {
@@ -2191,18 +2213,13 @@ bool NumericalStabilitySanitizer::sanitizeFunction(
   }
   std::set<BasicBlock *> AddedBlocks = {&CurrentBlock};
 
-  for (auto &BB : F) {
-    if (&BB == &F.back()) {
-      continue;
-    }
-    for (BasicBlock *Succ : successors(&BB)) {
-      if (BPI.isEdgeHot(&BB, Succ)) {
-        if (AddedBlocks.find(Succ) != AddedBlocks.end())
-          continue;
-        AddedBlocks.insert(Succ);
-        for (auto &Inst : *Succ) {
-          OriginalInstructions.emplace_back(&Inst);
-        }
+  BasicBlock &entry = F.getEntryBlock();
+  std::map<Instruction *, Instruction *> duplicatedInstr;
+
+  for (BasicBlock &BB : F){
+    for (Instruction &I : BB){
+      if (isa<StoreInst>(I)){
+        addToOriginal(&I, duplicatedInstr);
       }
     }
   }
