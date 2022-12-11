@@ -2227,7 +2227,7 @@ bool NumericalStabilitySanitizer::sanitizeFunction(
 
   for (BasicBlock &BB : F) {
     for (Instruction &I : BB) {
-      if (isa<StoreInst>(I)) {
+      if (isa<ReturnInst>(I)) {
         addToOriginal(&I, duplicatedInstr, OriginalInstructions);
       }
       // else if(isa<ReturnInst>(I) && duplicatedInstr.find(&I) ==
