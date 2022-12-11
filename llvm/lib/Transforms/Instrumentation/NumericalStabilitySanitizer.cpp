@@ -2079,25 +2079,33 @@ static void moveFastMathFlags(Function &F,
       I->setFastMathFlags(FMF);
 }
 
+void addToOriginal(Instruction *I,
+                   std::map<Instruction *, int> &duplicatedInstr,
+                   std::vector<Instruction *> &OriginalInstructions) {
 
-void addToOriginal(Instruction *I, std::map<Instruction *, int> &duplicatedInstr, std::vector<Instruction *> &OriginalInstructions) {
-  if (duplicatedInstr[I] > 0){
-    return;
-  }
+  std::stack<Instruction *> producerTree;
+  //base instruction
+  producerTree.push(I);
+  
+  while(!producerTree.empty()){
+    //grab top of stack
+    Instruction * temp = producerTree.top();
+    producerTree.pop();
 
-  for (Use &U : I->operands()){
-    Instruction *Inst = dyn_cast<Instruction>(U);
-    if (nullptr == Inst){
-      continue;
-    }
-      
-    addToOriginal(Inst, duplicatedInstr);
-  }
+    //add to 'reached' map and original instructions
+    ++duplicatedInstr[temp];
+    OriginalInstructions.emplace_back(temp);
 
-  if (!isa<StoreInst>(I)){
-    OriginalInstructions.emplace_back(&I);
-    ++duplicatedInstr[I];
+    for (Use &U : temp->operands()) {
+        Instruction *Inst = dyn_cast<Instruction>(U);
+        if (nullptr == Inst || duplicatedInstr.find(Inst) != duplicatedInstr.end()) {
+          continue;
+        }
+        //Add non null producers to stack
+        producerTree.push(Inst);
+      }
   }
+  
   return;
 }
 
@@ -2206,20 +2214,23 @@ bool NumericalStabilitySanitizer::sanitizeFunction(
   // creates new instructions inside the function.
 
   std::vector<Instruction *> OriginalInstructions;
-
-  // BasicBlock &CurrentBlock = F.getEntryBlock();
-  // for (auto &Inst : CurrentBlock) {
-  //   OriginalInstructions.emplace_back(&Inst);
-  // }
-  std::set<BasicBlock *> AddedBlocks = {&CurrentBlock};
-
   std::map<Instruction *, int> duplicatedInstr;
 
-  for (BasicBlock &BB : F){
-    for (Instruction &I : BB){
-      if (isa<StoreInst>(I)){
+  BasicBlock &CurrentBlock = F.getEntryBlock();
+  for (auto &Inst : CurrentBlock) {
+    OriginalInstructions.emplace_back(&Inst);
+    ++duplicatedInstr[&Inst];
+  }
+
+  for (BasicBlock &BB : F) {
+    for (Instruction &I : BB) {
+      if (isa<ReturnInst>(I)) {
         addToOriginal(&I, duplicatedInstr, OriginalInstructions);
       }
+      // else if(isa<ReturnInst>(I) && duplicatedInstr.find(&I) == duplicatedInstr.end()){
+      //   OriginalInstructions.emplace_back(&I);
+      //   ++duplicatedInstr[&I];
+      // }
     }
   }
 
