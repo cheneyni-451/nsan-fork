@@ -2084,28 +2084,31 @@ void addToOriginal(Instruction *I,
                    std::vector<Instruction *> &OriginalInstructions) {
 
   std::stack<Instruction *> producerTree;
-  //base instruction
+  // base instruction
   producerTree.push(I);
-  
-  while(!producerTree.empty()){
-    //grab top of stack
-    Instruction * temp = producerTree.top();
+
+  while (!producerTree.empty()) {
+    // grab top of stack
+    Instruction *temp = producerTree.top();
     producerTree.pop();
 
-    //add to 'reached' map and original instructions
+    // add to 'reached' map and original instructions
     ++duplicatedInstr[temp];
-    OriginalInstructions.emplace_back(temp);
+    if (!isa<StoreInst>(temp)) {
+      OriginalInstructions.emplace_back(temp);
+    }
 
     for (Use &U : temp->operands()) {
-        Instruction *Inst = dyn_cast<Instruction>(U);
-        if (nullptr == Inst || duplicatedInstr.find(Inst) != duplicatedInstr.end()) {
-          continue;
-        }
-        //Add non null producers to stack
-        producerTree.push(Inst);
+      Instruction *Inst = dyn_cast<Instruction>(U);
+      if (nullptr == Inst ||
+          duplicatedInstr.find(Inst) != duplicatedInstr.end()) {
+        continue;
       }
+      // Add non null producers to stack
+      producerTree.push(Inst);
+    }
   }
-  
+
   return;
 }
 
@@ -2224,10 +2227,11 @@ bool NumericalStabilitySanitizer::sanitizeFunction(
 
   for (BasicBlock &BB : F) {
     for (Instruction &I : BB) {
-      if (isa<ReturnInst>(I)) {
+      if (isa<StoreInst>(I)) {
         addToOriginal(&I, duplicatedInstr, OriginalInstructions);
       }
-      // else if(isa<ReturnInst>(I) && duplicatedInstr.find(&I) == duplicatedInstr.end()){
+      // else if(isa<ReturnInst>(I) && duplicatedInstr.find(&I) ==
+      // duplicatedInstr.end()){
       //   OriginalInstructions.emplace_back(&I);
       //   ++duplicatedInstr[&I];
       // }
